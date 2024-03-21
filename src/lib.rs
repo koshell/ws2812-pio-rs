@@ -13,8 +13,8 @@
 //! Bear in mind that you will have to take care of timing requirements
 //! yourself then.
 
-use embedded_hal::timer::CountDown;
-use fugit::{ExtU32, HertzU32, MicrosDurationU32};
+use embedded_hal::delay::DelayNs;
+use fugit::HertzU32;
 use rp2040_hal::{
     gpio::AnyPin,
     pio::{PIOExt, StateMachineIndex, Tx, UninitStateMachine, PIO},
@@ -166,7 +166,7 @@ where
     /// PIO FIFO until all data has been transmitted to the LED chain.
     fn write<T, J>(&mut self, iterator: T) -> Result<(), ()>
     where
-        T: Iterator<Item = J>,
+        T: IntoIterator<Item = J>,
         J: Into<Self::Color>,
     {
         for item in iterator {
@@ -214,7 +214,7 @@ where
 ///```
 pub struct Ws2812<P, SM, C, I>
 where
-    C: CountDown,
+    C: DelayNs,
     I: AnyPin<Function = P::PinFunction>,
     P: PIOExt,
     SM: StateMachineIndex,
@@ -225,7 +225,7 @@ where
 
 impl<P, SM, C, I> Ws2812<P, SM, C, I>
 where
-    C: CountDown,
+    C: DelayNs,
     I: AnyPin<Function = P::PinFunction>,
     P: PIOExt,
     SM: StateMachineIndex,
@@ -246,8 +246,7 @@ where
 
 impl<P, SM, I, C> SmartLedsWrite for Ws2812<P, SM, C, I>
 where
-    C: CountDown,
-    C::Time: From<MicrosDurationU32>,
+    C: DelayNs,
     I: AnyPin<Function = P::PinFunction>,
     P: PIOExt,
     SM: StateMachineIndex,
@@ -256,14 +255,13 @@ where
     type Error = ();
     fn write<T, J>(&mut self, iterator: T) -> Result<(), ()>
     where
-        T: Iterator<Item = J>,
+        T: IntoIterator<Item = J>,
         J: Into<Self::Color>,
     {
         self.driver.tx.clear_stalled_flag();
         while !self.driver.tx.is_empty() && !self.driver.tx.has_stalled() {}
 
-        self.cd.start(60u32.micros());
-        let _ = nb::block!(self.cd.wait());
+        self.cd.delay_us(60);
 
         self.driver.write(iterator)
     }
